@@ -1,3 +1,4 @@
+import itertools
 import struct
 from typing import Optional
 from typing import Tuple
@@ -90,6 +91,7 @@ def right_pad_page(text: str, char: str) -> str:
 def coerce_text(text: str,
                 max_pages: int = 5,
                 truncated_text_error_multiplier: int = 1,
+                handle_unsupported: str = 'error',
                 ) -> str:
     """
     coerce text from unicode to USC-2 masqueraded as UTF-16, that can be encoded as UTF-8
@@ -103,11 +105,13 @@ def coerce_text(text: str,
     _graphemes = list(grapheme.graphemes(text))
 
     # re-encode and count encoding failures
-    graphemes_be, graphemes_le = zip(*map(coerce_grapheme, _graphemes))
+    graphemes_be, graphemes_le = zip(*map(coerce_grapheme, _graphemes, itertools.repeat(handle_unsupported)))
     errors_be = [g is None for g in graphemes_be]
     errors_le = [g is None for g in graphemes_le]
     graphemes_be = ['\uFFFD' if g is None else g for g in graphemes_be]
     graphemes_le = ['\uFDFF' if g is None else g for g in graphemes_le]
+    print(graphemes_be)
+    print(errors_be)
 
     # try single page encoding, which allows for 70 chars
     single_page_be = ''.join(graphemes_be)
@@ -248,3 +252,6 @@ def coerce_text(text: str,
 
 if __name__ == '__main__':
     print(repr(coerce_text('1234567890\0' * 5 + '💩qwe😊asd✔')))
+
+    # todo: error condition
+    print(repr(coerce_text('\0\0\0\0\0\0💩qwe😊asd✔')))
