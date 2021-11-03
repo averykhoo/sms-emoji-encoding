@@ -91,7 +91,7 @@ def right_pad_page(text: str, char: str) -> str:
 def coerce_text(text: str,
                 max_pages: int = 5,
                 truncated_text_error_multiplier: int = 1,
-                handle_unsupported: str = 'error',
+                handle_unsupported: str = 'replace',
                 ) -> str:
     """
     coerce text from unicode to USC-2 masqueraded as UTF-16, that can be encoded as UTF-8
@@ -254,4 +254,4 @@ if __name__ == '__main__':
     print(repr(coerce_text('1234567890\0' * 5 + '💩qwe😊asd✔')))
 
     # todo: error condition
-    print(repr(coerce_text('\0\0\0\0\0\0💩qwe😊asd✔')))
+    print(repr(coerce_text('\0\0\0\0\0\0💩qwe😊asd✔', handle_unsupported='error')))
