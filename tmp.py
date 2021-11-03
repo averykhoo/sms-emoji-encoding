@@ -78,12 +78,11 @@ def coerce_grapheme(chars: str,
     except UnicodeEncodeError:
         encoded_le = None
 
-    # no point returning errors on both sides, causes weird behavior in the greedy algorithm
+    # no point returning errors on both sides, increases time and space complexity the greedy algorithm
     if encoded_be is None and encoded_le is None:
         return '\uFFFD', '\uFDFF'
 
     return encoded_be, encoded_le
-
 
 
 def right_pad_page(text: str, char: str) -> str:
