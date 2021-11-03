@@ -34,6 +34,12 @@ def coerce_grapheme(chars: str,
     graphemes containing unsupported characters are handled according to the handle_unsupported parameter
     returns both UTF-16-BE and UTF-16-LE representations
 
+    chars that are almost certainly broken both ways:
+    [chr(x) for x in range(0xFFFF) if 0xD8 <= x & 0xFF < 0xE0 and 0xD8 <= x >> 8 < 0xE0]
+    fortunately these mostly encode items in unassigned planes and private use planes
+
+    TODO: try all 4 unicode normalization forms
+
     :param chars: a single unicode character
     :param handle_unsupported: 'replace', 'ignore', 'error', 'pass'
     """
@@ -100,8 +106,8 @@ def coerce_text(text: str,
     graphemes_be, graphemes_le = zip(*map(coerce_grapheme, _graphemes))
     errors_be = [g is None for g in graphemes_be]
     errors_le = [g is None for g in graphemes_le]
-    graphemes_be = [g or '\uFFFD' for g in graphemes_be]
-    graphemes_le = [g or '\uFDFF' for g in graphemes_le]
+    graphemes_be = ['\uFFFD' if g is None else g for g in graphemes_be]
+    graphemes_le = ['\uFDFF' if g is None else g for g in graphemes_le]
 
     # try single page encoding, which allows for 70 chars
     single_page_be = ''.join(graphemes_be)
@@ -241,4 +247,4 @@ def coerce_text(text: str,
 
 
 if __name__ == '__main__':
-    print(repr(coerce_text('1234567890' * 5 + '💩qwe😊asd✔')))
+    print(repr(coerce_text('1234567890\0' * 5 + '💩qwe😊asd✔')))
