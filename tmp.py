@@ -77,7 +77,12 @@ def coerce_grapheme(chars: str,
     except UnicodeEncodeError:
         encoded_le = None
 
+    # no point returning errors on both sides, causes weird behavior in the greedy algorithm
+    if encoded_be is None and encoded_le is None:
+        return '\uFFFD', '\uFDFF'
+
     return encoded_be, encoded_le
+
 
 
 def right_pad_page(text: str, char: str) -> str:
@@ -110,8 +115,10 @@ def coerce_text(text: str,
     errors_le = [g is None for g in graphemes_le]
     graphemes_be = ['\uFFFD' if g is None else g for g in graphemes_be]
     graphemes_le = ['\uFDFF' if g is None else g for g in graphemes_le]
-    print(graphemes_be)
-    print(errors_be)
+    print('graphemes_be', graphemes_be)
+    print('graphemes_le', graphemes_le)
+    print('errors_be', errors_be)
+    print('errors_le', errors_le)
 
     # try single page encoding, which allows for 70 chars
     single_page_be = ''.join(graphemes_be)
