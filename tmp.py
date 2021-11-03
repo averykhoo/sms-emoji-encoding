@@ -1,5 +1,6 @@
 import itertools
 import struct
+from pprint import pprint
 from typing import Optional
 from typing import Tuple
 
@@ -103,6 +104,8 @@ def coerce_text(text: str,
     works in pages of exactly 63 unicode chars
     pages may be either in UTF-16-BE or UTF-16-LE with BOM
 
+    TODO: don't append empty pages
+
     the algo contains a strange mix of greedy and beam search because global optimization is too much effort
     also this produces more intuitively understandable results than global optimization
     """
@@ -159,7 +162,7 @@ def coerce_text(text: str,
 
     # try multi-page encoding, which allows for 63 chars * max_pages
     states = [(0, 0, [])]  # idx, n_errors, pages
-    for _ in range(max_pages):
+    for _page_idx in range(max_pages):
         new_states = []
 
         # big-endian
@@ -222,6 +225,8 @@ def coerce_text(text: str,
                 # end of text
                 new_states.append((start_idx, n_errors, pages))
 
+        print(_page_idx, 'states', states)
+
         # filter to the best possible states so far
         best_new_states = dict()
         for start_idx, n_errors, pages in new_states:
@@ -239,16 +244,21 @@ def coerce_text(text: str,
     # count lost text as encoding errors
     errors_and_pages = []
     for start_idx, n_errors, pages in states:
-        truncated_text_errors = max(0, start_idx - (63 * max_pages)) * truncated_text_error_multiplier
+        truncated_text_errors = max(0, len(_graphemes) - start_idx) * truncated_text_error_multiplier
         errors_and_pages.append((n_errors + truncated_text_errors, pages))
     errors_and_pages.append((single_page_error_be, [single_page_be]))
     errors_and_pages.append((single_page_error_le, [single_page_le]))
+
+    pprint(errors_and_pages)
+
     min_error, best_pages = min(errors_and_pages, key=lambda x: x[0])
     print(min_error, best_pages)
     print(list(map(len, best_pages)))
     out = []
     for page in best_pages[:-1]:
-        if page[0] == '\uFFFE':
+        if not page:
+            raise RuntimeError('empty page')
+        elif page[0] == '\uFFFE':
             out.append(right_pad_page(page, '\uFFFE'))
         else:
             out.append(right_pad_page(page, '\uFEFF'))
