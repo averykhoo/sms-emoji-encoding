@@ -89,6 +89,8 @@ def coerce_grapheme(chars: str,
         :return:
         """
         assert endianness in {'>', '<'}
+        nonlocal all_grapheme_bytes_be, all_n_chars
+
         for grapheme_bytes_be, n_chars in zip(all_grapheme_bytes_be, all_n_chars):
             try:
                 encoded = ''.join(map(chr, struct.unpack(f'{endianness}{n_chars}H', grapheme_bytes_be)))
