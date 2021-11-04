@@ -1,11 +1,19 @@
 import itertools
 import struct
+import warnings
 from functools import lru_cache
 from pprint import pprint
 from typing import Optional
 from typing import Tuple
 
 import grapheme
+# constants
+import unicodedata
+
+REPLACEMENT_CHARACTER_BE = '\uFFFD'
+REPLACEMENT_CHARACTER_LE = '\uFDFF'
+BOM_BE = '\uFEFF'  # aka ZWNBSP, although that specific use has been deprecated for this char
+BOM_LE = '\uFFFE'
 
 UNSUPPORTED_CHARS = {
     '\0',  # null
@@ -42,8 +50,7 @@ def coerce_grapheme(chars: str,
     [chr(x) for x in range(0xFFFF) if 0xD8 <= x & 0xFF < 0xE0 and 0xD8 <= x >> 8 < 0xE0]
     fortunately these mostly encode items in unassigned planes and private use planes
 
-    TODO: try all 4 unicode normalization forms
-    todo: handle unencodable MN somehow, maybe as a "try harder" step when both fail
+    todo: optionally handle unencodable diacritics by dropping, maybe as a "try harder" step when both fail
 
     :param chars: a single unicode character
     :param handle_unsupported: 'replace', 'ignore', 'error', 'pass'
@@ -54,36 +61,49 @@ def coerce_grapheme(chars: str,
     # don't allow any unsupported characters
     if set(chars).intersection(UNSUPPORTED_CHARS):
         if handle_unsupported.casefold() == 'replace':
-            return '\uFFFD', '\uFDFF'
+            return REPLACEMENT_CHARACTER_BE, REPLACEMENT_CHARACTER_LE
         if handle_unsupported.casefold() == 'ignore':
             return '', ''
         if handle_unsupported.casefold() == 'error':
+            warnings.warn("while it's supported, you should never need to use this mode")
             return None, None
 
+    # unicode normalization of chars
+    normalized_chars = set()
+    normalized_chars.add(chars)
+    for normalization_form in ('NFC', 'NFKC', 'NFD', 'NFKD'):
+        normalized_chars.add(unicodedata.normalize(normalization_form, chars))
+
     # encode as UTF-16-BE
-    grapheme_bytes_be = chars.encode('utf-16-be')
-    assert len(grapheme_bytes_be) % 2 == 0
-    n_chars = int(len(grapheme_bytes_be) // 2)
+    all_grapheme_bytes_be = sorted([chars.encode('utf-16-be') for chars in normalized_chars], key=len)
+    assert all(len(grapheme_bytes_be) % 2 == 0 for grapheme_bytes_be in all_grapheme_bytes_be)
+    all_n_chars = [int(len(grapheme_bytes_be) // 2) for grapheme_bytes_be in all_grapheme_bytes_be]
 
     # decode as UCS-2
-    try:
-        encoded_be = ''.join(map(chr, struct.unpack(f'>{n_chars}H', grapheme_bytes_be)))
-        assert len(encoded_be) > 0
-        encoded_be.encode('utf8')
-    except UnicodeEncodeError:
-        encoded_be = None
+    def decode_ucs2(endianness: str) -> Optional[str]:
+        """
+        decode as UCS-2 with some specific endianness
+        :param endianness: ">" for big, "<" for little
+        :return:
+        """
+        assert endianness in {'>', '<'}
+        for grapheme_bytes_be, n_chars in zip(all_grapheme_bytes_be, all_n_chars):
+            try:
+                encoded = ''.join(map(chr, struct.unpack(f'{endianness}{n_chars}H', grapheme_bytes_be)))
+                assert len(encoded) > 0
+                encoded.encode('utf8')
+                return encoded
+            except UnicodeEncodeError:
+                pass
+        return None
 
-    # decode as UCS-2-LE (kind of, basically swap the endianness)
-    try:
-        encoded_le = ''.join(map(chr, struct.unpack(f'<{n_chars}H', grapheme_bytes_be)))
-        assert len(encoded_le) > 0
-        encoded_le.encode('utf8')
-    except UnicodeEncodeError:
-        encoded_le = None
+    # decode as UCS-2 in both endiannesses
+    encoded_be = decode_ucs2('>')
+    encoded_le = decode_ucs2('<')
 
     # no point returning errors on both sides, increases time and space complexity the greedy algorithm
     if encoded_be is None and encoded_le is None:
-        return '\uFFFD', '\uFDFF'
+        return REPLACEMENT_CHARACTER_BE, REPLACEMENT_CHARACTER_LE
 
     return encoded_be, encoded_le
 
@@ -116,24 +136,20 @@ def coerce_text(text: str,
     graphemes_be, graphemes_le = zip(*map(coerce_grapheme, _graphemes, itertools.repeat(handle_unsupported)))
     errors_be = [g is None for g in graphemes_be]
     errors_le = [g is None for g in graphemes_le]
-    graphemes_be = ['\uFFFD' if g is None else g for g in graphemes_be]
-    graphemes_le = ['\uFDFF' if g is None else g for g in graphemes_le]
-    print('graphemes_be', graphemes_be)
-    print('graphemes_le', graphemes_le)
-    print('errors_be', errors_be)
-    print('errors_le', errors_le)
+    graphemes_be = [REPLACEMENT_CHARACTER_BE if g is None else g for g in graphemes_be]
+    graphemes_le = [REPLACEMENT_CHARACTER_LE if g is None else g for g in graphemes_le]
 
     # try single page encoding, which allows for 70 chars
     single_page_be = ''.join(graphemes_be)
-    single_page_le = '\uFFFE' + ''.join(graphemes_le)
+    single_page_le = BOM_LE + ''.join(graphemes_le)
 
-    # big endian text must not start with U+FFFE, otherwise it will decode wrongly
-    if single_page_be[0] == '\uFFFE':
-        single_page_be = '\uFEFF' + single_page_be
+    # big endian text must not start with BOM_LE, otherwise it will decode wrongly
+    if single_page_be[0] == BOM_LE:
+        single_page_be = BOM_BE + single_page_be
 
     # count errors for big endian
     single_page_error_be = 0
-    message_length = int(single_page_be.startswith('\uFEFF\uFFFE'))
+    message_length = int(single_page_be.startswith(BOM_BE + BOM_LE))
     for error, fragment in zip(errors_be, graphemes_be):
         if message_length + len(fragment) > 70:
             single_page_error_be += len(fragment) * truncated_text_error_multiplier
@@ -143,7 +159,7 @@ def coerce_text(text: str,
 
     # count errors for little endian
     single_page_error_le = 0
-    message_length = 1  # U+FFFE
+    message_length = 1  # BOM_LE
     for error, fragment in zip(errors_le, graphemes_le):
         if message_length + len(fragment) > 70:
             single_page_error_le += len(fragment) * truncated_text_error_multiplier
@@ -165,6 +181,11 @@ def coerce_text(text: str,
     for _page_idx in range(max_pages):
         new_states = []
 
+        def append(_idx, _n_errors, _pages, _page):
+            nonlocal new_states
+            if any(_page):  # don't save empty pages
+                new_states.append((_idx, _n_errors, [*_pages, ''.join(_page)]))
+
         # big-endian
         for start_idx, n_errors, pages in states:
             page = []
@@ -172,29 +193,26 @@ def coerce_text(text: str,
             for idx in range(start_idx, len(_graphemes)):
                 # if this char caused an encoding error, save before adding it
                 if errors_be[idx]:
-                    if any(page):  # don't save empty pages
-                        new_states.append((idx, n_errors, [*pages, ''.join(page)]))
+                    append(idx, n_errors, pages, page)
                     n_errors += 1
 
                 # append this grapheme to the page
                 page.append(graphemes_be[idx])
                 total_len += len(graphemes_be[idx])
 
-                # we can't allow a U+FFFE to be at the start
-                if page[0][0] == '\uFFFE':
-                    page = ['\uFEFF'] + page
+                # we can't allow a BOM_LE to be the first char of a page
+                if page[0][0] == BOM_LE:
+                    page = [BOM_BE] + page
                     total_len += 1
 
                 # we're at the end of the text, save because we're gonna exit
                 if idx + 1 >= len(graphemes_be):
-                    if any(page):
-                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    append(idx, n_errors, pages, page)
                     break
 
                 # next char is too big to fit in page, save and exit
                 elif len(graphemes_be[idx + 1]) + total_len > 63:
-                    if any(page):
-                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    append(idx, n_errors, pages, page)
                     break
             else:
                 # end of text
@@ -203,13 +221,12 @@ def coerce_text(text: str,
 
         # little-endian
         for start_idx, n_errors, pages in states:
-            page = ['\uFFFE']
+            page = [BOM_LE]
             total_len = 1
             for idx in range(start_idx, len(_graphemes)):
                 # if this char caused an encoding error, save before adding it
                 if errors_le[idx]:
-                    if any(page):
-                        new_states.append((idx, n_errors, [*pages, ''.join(page)]))
+                    append(idx, n_errors, pages, page)
                     n_errors += 1
 
                 # append this grapheme to the page
@@ -218,14 +235,12 @@ def coerce_text(text: str,
 
                 # we're at the end of the text, save because we're gonna exit
                 if idx + 1 >= len(graphemes_le):
-                    if any(page):
-                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    append(idx, n_errors, pages, page)
                     break
 
                 # next char is too big to fit in page, save and exit
                 elif len(graphemes_le[idx + 1]) + total_len > 63:
-                    if any(page):
-                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    append(idx, n_errors, pages, page)
                     break
             else:
                 # end of text
@@ -265,10 +280,10 @@ def coerce_text(text: str,
     for page in best_pages[:-1]:
         if not page:
             raise RuntimeError('empty page')
-        elif page[0] == '\uFFFE':
-            out.append(right_pad_page(page, '\uFFFE'))
+        elif page[0] == BOM_LE:
+            out.append(right_pad_page(page, BOM_LE))
         else:
-            out.append(right_pad_page(page, '\uFEFF'))
+            out.append(right_pad_page(page, BOM_BE))
     out.append(best_pages[-1])
     print(list(map(len, out)), out)
     return ''.join(out)
