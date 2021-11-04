@@ -7,9 +7,9 @@ from typing import Optional
 from typing import Tuple
 
 import grapheme
-# constants
 import unicodedata
 
+# constants
 REPLACEMENT_CHARACTER_BE = '\uFFFD'
 REPLACEMENT_CHARACTER_LE = '\uFDFF'
 BOM_BE = '\uFEFF'  # aka ZWNBSP, although that specific use has been deprecated for this char
@@ -73,6 +73,8 @@ def coerce_grapheme(chars: str,
     normalized_chars.add(chars)
     for normalization_form in ('NFC', 'NFKC', 'NFD', 'NFKD'):
         normalized_chars.add(unicodedata.normalize(normalization_form, chars))
+    if len(normalized_chars) > 1:
+        print('normalized_chars', normalized_chars)
 
     # encode as UTF-16-BE
     all_grapheme_bytes_be = sorted([chars.encode('utf-16-be') for chars in normalized_chars], key=len)
@@ -293,4 +295,4 @@ if __name__ == '__main__':
     print(repr(coerce_text('1234567890\0' * 5 + '💩qwe😊asd✔')))
 
     # todo: error condition
-    print(repr(coerce_text('\0\0\0\0\0\0💩qwe😊asd✔', handle_unsupported='error')))
+    print(repr(coerce_text('\0\0\0\0\0\0💩qwé😊ÅSD✔', handle_unsupported='error')))
