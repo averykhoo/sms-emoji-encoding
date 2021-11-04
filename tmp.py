@@ -1,5 +1,6 @@
 import itertools
 import struct
+from functools import lru_cache
 from pprint import pprint
 from typing import Optional
 from typing import Tuple
@@ -28,6 +29,7 @@ UNSUPPORTED_CHARS = {
 }
 
 
+@lru_cache(maxsize=0xFFFF)
 def coerce_grapheme(chars: str,
                     handle_unsupported: str = 'replace',
                     ) -> Tuple[Optional[str], Optional[str]]:
@@ -41,6 +43,7 @@ def coerce_grapheme(chars: str,
     fortunately these mostly encode items in unassigned planes and private use planes
 
     TODO: try all 4 unicode normalization forms
+    todo: handle unencodable MN somehow, maybe as a "try harder" step when both fail
 
     :param chars: a single unicode character
     :param handle_unsupported: 'replace', 'ignore', 'error', 'pass'
@@ -103,10 +106,8 @@ def coerce_text(text: str,
     works in pages of exactly 63 unicode chars
     pages may be either in UTF-16-BE or UTF-16-LE with BOM
 
-    TODO: don't append empty pages
-
     the algo contains a strange mix of greedy and beam search because global optimization is too much effort
-    also this produces more intuitively understandable results than global optimization
+    also this produces results that are slightly more intuitively understandable than global optimization
     """
     assert max_pages > 0
     _graphemes = list(grapheme.graphemes(text))
@@ -171,9 +172,9 @@ def coerce_text(text: str,
             for idx in range(start_idx, len(_graphemes)):
                 # if this char caused an encoding error, save before adding it
                 if errors_be[idx]:
-                    new_states.append((idx, n_errors, [*pages, ''.join(page)]))
+                    if any(page):  # don't save empty pages
+                        new_states.append((idx, n_errors, [*pages, ''.join(page)]))
                     n_errors += 1
-                    print(n_errors, idx)
 
                 # append this grapheme to the page
                 page.append(graphemes_be[idx])
@@ -186,16 +187,19 @@ def coerce_text(text: str,
 
                 # we're at the end of the text, save because we're gonna exit
                 if idx + 1 >= len(graphemes_be):
-                    new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    if any(page):
+                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
                     break
 
                 # next char is too big to fit in page, save and exit
                 elif len(graphemes_be[idx + 1]) + total_len > 63:
-                    new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    if any(page):
+                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
                     break
             else:
                 # end of text
-                new_states.append((start_idx, n_errors, pages))
+                if any(page):
+                    new_states.append((start_idx, n_errors, pages))
 
         # little-endian
         for start_idx, n_errors, pages in states:
@@ -204,7 +208,8 @@ def coerce_text(text: str,
             for idx in range(start_idx, len(_graphemes)):
                 # if this char caused an encoding error, save before adding it
                 if errors_le[idx]:
-                    new_states.append((idx, n_errors, [*pages, ''.join(page)]))
+                    if any(page):
+                        new_states.append((idx, n_errors, [*pages, ''.join(page)]))
                     n_errors += 1
 
                 # append this grapheme to the page
@@ -213,16 +218,19 @@ def coerce_text(text: str,
 
                 # we're at the end of the text, save because we're gonna exit
                 if idx + 1 >= len(graphemes_le):
-                    new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    if any(page):
+                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
                     break
 
                 # next char is too big to fit in page, save and exit
                 elif len(graphemes_le[idx + 1]) + total_len > 63:
-                    new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
+                    if any(page):
+                        new_states.append((idx + 1, n_errors, [*pages, ''.join(page)]))
                     break
             else:
                 # end of text
-                new_states.append((start_idx, n_errors, pages))
+                if any(page):
+                    new_states.append((start_idx, n_errors, pages))
 
         print(_page_idx, 'states', states)
 
@@ -250,7 +258,7 @@ def coerce_text(text: str,
 
     pprint(errors_and_pages)
 
-    min_error, best_pages = min(errors_and_pages, key=lambda x: x[0])
+    min_error, best_pages = min(errors_and_pages, key=lambda x: (x[0], len(x[1]), len(x[1][-1])))
     print(min_error, best_pages)
     print(list(map(len, best_pages)))
     out = []
@@ -263,7 +271,7 @@ def coerce_text(text: str,
             out.append(right_pad_page(page, '\uFEFF'))
     out.append(best_pages[-1])
     print(list(map(len, out)), out)
-    return ''.join(best_pages)
+    return ''.join(out)
 
 
 if __name__ == '__main__':
