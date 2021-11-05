@@ -38,7 +38,8 @@ def coerce_grapheme(chars: str,
     Graphemes containing unsupported characters are handled according to the HANDLE_UNSUPPORTED parameter
 
     The following unicode codepoints are almost certainly broken both ways:
-    [chr(x) for x in range(0xFFFF) if 0xD8 <= x & 0xFF < 0xE0 and 0xD8 <= x >> 8 < 0xE0]
+    [chr(x) for x in range(0xFFFF) if 0xD8 <= (x & 0xFF) < 0xE0 and 0xD8 <= (x >> 8) < 0xE0]
+    or equivalently [chr((x << 8) + y) for x in range(0xD8, 0xE0) for y in range(0xD8, 0xE0)]
     Fortunately, these are surrogates that mostly encode items in unassigned planes and the private use planes
 
     :param chars: a single grapheme (zero or more unicode codepoints)
