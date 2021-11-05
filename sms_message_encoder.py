@@ -1,4 +1,5 @@
 import itertools
+import string
 import struct
 import warnings
 from functools import lru_cache
@@ -8,33 +9,18 @@ from typing import Tuple
 
 import grapheme
 import unicodedata
+from unidecode import unidecode
 
-# constants
-REPLACEMENT_CHARACTER_BE = '\uFFFD'
-REPLACEMENT_CHARACTER_LE = '\uFDFF'
-BOM_BE = '\uFEFF'  # aka ZWNBSP, although that specific use has been deprecated for this char
-BOM_LE = '\uFFFE'
+from constants import BOM_BE
+from constants import BOM_LE
+from constants import REPLACEMENT_CHARACTER_BE
+from constants import REPLACEMENT_CHARACTER_LE
+from constants import UNSUPPORTED_CHARS
 
-UNSUPPORTED_CHARS = {
-    '\0',  # null
 
-    # BiDi control characters
-    # https://developer.mozilla.org/en-US/docs/Web/Guide/Unicode_Bidrectional_Text_Algorithm
-    '\u202A',  # Left-to-Right Embedding (LRE)
-    '\u202B',  # Right-to-Left Embedding (RLE)
-    '\u202D',  # Left-to-Right Override (LRO)
-    '\u202E',  # Right-to-Left Override (RLO)
-    '\u202C',  # Pop Directional Formatting (PDF)
-    '\u2069',  # Pop Directional Isolate (PDI)
-    '\u2066',  # Left-to-Right Isolate (LRI)
-    '\u2067',  # Right-to-Left Isolate (LRI)
-    '\u2068',  # First Strong Isolate (FSI)
-    # https://en.wikipedia.org/wiki/Bidirectional_text
-    '\u200E',  # LEFT-TO-RIGHT MARK (LRM)
-    '\u200F',  # RIGHT-TO-LEFT MARK (RLM)
-    '\u061C',  # ARABIC LETTER MARK (ALM)
-    '\u200E',  # LEFT-TO-RIGHT MARK (LRM)
-}
+def coerce_plaintext(text: str) -> str:
+    unprintable = ''.join(chr(i) for i in range(256) if chr(i) not in string.printable)
+    return unidecode(text).translate(str.maketrans('`\b\f\v\t', "'    ", unprintable))
 
 
 @lru_cache(maxsize=0xFFFF)
@@ -42,18 +28,22 @@ def coerce_grapheme(chars: str,
                     handle_unsupported: str = 'replace',
                     ) -> Tuple[Optional[str], Optional[str]]:
     """
-    coerce a single grapheme from unicode to USC-2 masqueraded as UTF-16, that can be encoded as UTF-8
-    graphemes containing unsupported characters are handled according to the handle_unsupported parameter
-    returns both UTF-16-BE and UTF-16-LE representations
+    This helper function is fairly slow, but it's cached
+    and you'd expect to see a reasonably small number of unique graphemes
 
-    chars that are almost certainly broken both ways:
+    Coerces a single grapheme from unicode codepoints into UTF-16 encoded bytes
+    masqueraded a valid string of UCS-2 unicode codepoints
+    that can be safely represented (ie. encoded and decoded) as valid strict UTF-8 bytes
+
+    Graphemes containing unsupported characters are handled according to the HANDLE_UNSUPPORTED parameter
+
+    The following unicode codepoints are almost certainly broken both ways:
     [chr(x) for x in range(0xFFFF) if 0xD8 <= x & 0xFF < 0xE0 and 0xD8 <= x >> 8 < 0xE0]
-    fortunately these mostly encode items in unassigned planes and private use planes
+    Fortunately, these are surrogates that mostly encode items in unassigned planes and the private use planes
 
-    todo: optionally handle unencodable diacritics by dropping, maybe as a "try harder" step when both fail
-
-    :param chars: a single unicode character
+    :param chars: a single grapheme (zero or more unicode codepoints)
     :param handle_unsupported: 'replace', 'ignore', 'error', 'pass'
+    :return: a tuple of UTF-16-BE and UTF-16-LE representations, or None for characters that can't be represented
     """
     assert len(chars) > 0
     assert handle_unsupported.casefold() in {'replace', 'ignore', 'error', 'pass'}
@@ -107,6 +97,7 @@ def coerce_grapheme(chars: str,
 
     # no point returning errors on both sides, increases time and space complexity the greedy algorithm
     if encoded_be is None and encoded_le is None:
+        # todo: handle unencodable diacritics by dropping them, maybe as a "try harder" step since both failed anyway
         return REPLACEMENT_CHARACTER_BE, REPLACEMENT_CHARACTER_LE
 
     return encoded_be, encoded_le
