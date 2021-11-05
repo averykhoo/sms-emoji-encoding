@@ -50,8 +50,7 @@ def mobile_phone_render(*pages):
 
 
 if __name__ == '__main__':
-    print(mobile_phone_render(*sms_api_endpoint('%E2%9C%94test%F0%9F%92%A9')))
-    print(mobile_phone_render(*sms_api_endpoint('%E2%80%9C%E2%80%9D%E2%80%9C%E2%80%9D')))
-    print(mobile_phone_render(*sms_api_endpoint('%E2%80%9C%E2%80%9D%E2%80%9C%E2%80%9D%E2%80%9C%E2%80%9D')))
+    print(mobile_phone_render(*sms_api_endpoint(quote('✔test💩'))))
+    print(mobile_phone_render(*sms_api_endpoint(quote('“”å‘’'))))
     print(mobile_phone_render(*sms_api_endpoint(quote(coerce_text('✔test💩')))))
-    print(mobile_phone_render(*sms_api_endpoint(quote(coerce_text('“”‘’')))))
+    print(mobile_phone_render(*sms_api_endpoint(quote(coerce_text('“”å‘’')))))
