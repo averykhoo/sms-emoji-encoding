@@ -69,7 +69,6 @@ def coerce_grapheme(chars: str,
     # encode as UTF-16-BE
     all_grapheme_bytes_be = sorted([chars.encode('utf-16-be') for chars in normalized_chars], key=len)
     assert all(len(grapheme_bytes_be) % 2 == 0 for grapheme_bytes_be in all_grapheme_bytes_be)
-    all_n_chars = [int(len(grapheme_bytes_be) // 2) for grapheme_bytes_be in all_grapheme_bytes_be]
 
     # decode as UCS-2
     def decode_ucs2(endianness: str) -> Optional[str]:
@@ -79,9 +78,10 @@ def coerce_grapheme(chars: str,
         :return:
         """
         assert endianness in {'>', '<'}
-        nonlocal all_grapheme_bytes_be, all_n_chars
+        nonlocal all_grapheme_bytes_be
 
-        for grapheme_bytes_be, n_chars in zip(all_grapheme_bytes_be, all_n_chars):
+        for grapheme_bytes_be in all_grapheme_bytes_be:
+            n_chars = int(len(grapheme_bytes_be) // 2)
             try:
                 encoded = ''.join(map(chr, struct.unpack(f'{endianness}{n_chars}H', grapheme_bytes_be)))
                 assert len(encoded) > 0
@@ -178,7 +178,13 @@ def coerce_text(text: str,
 
         def append(_idx, _n_errors, _pages, _page):
             nonlocal new_states
-            if any(_page):  # don't save empty pages
+            page_text = ''.join(_page)
+
+            # little endian: gotta strip the BOM
+            if page_text and page_text[0] in {BOM_BE, BOM_LE}:
+                if len(page_text) > 1:
+                    new_states.append((_idx, _n_errors, [*_pages, ''.join(_page)]))
+            elif len(page_text) > 0:
                 new_states.append((_idx, _n_errors, [*_pages, ''.join(_page)]))
 
         # big-endian
@@ -202,7 +208,7 @@ def coerce_text(text: str,
 
                 # we're at the end of the text, save because we're gonna exit
                 if idx + 1 >= len(graphemes_be):
-                    append(idx, n_errors, pages, page)
+                    append(idx + 1, n_errors, pages, page)
                     break
 
                 # next char is too big to fit in page, save and exit
