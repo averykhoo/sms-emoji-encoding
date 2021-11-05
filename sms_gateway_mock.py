@@ -22,8 +22,11 @@ def sms_api_endpoint(url_encoded_query_parameter):
     # (3): replace characters greater than U+FFFF with U+FFFD
     replaced_text = ''.join(char if ord(char) <= 0xFFFF else '\uFFFD' for char in text)
 
-    # (4): split into pages of 63 characters
-    pages = [replaced_text[i:i + 63] for i in range(0, len(replaced_text), 63)]
+    # (4): split into pages of 63 characters (except for a single page)
+    if len(replaced_text) > 70:
+        pages = [replaced_text[i:i + 63] for i in range(0, len(replaced_text), 63)]
+    else:
+        pages = [replaced_text]
 
     # (5): encode each page as UCS-2 (big endian)
     encoded_pages = [struct.pack(f'>{len(page)}H', *(ord(char) for char in page)) for page in pages]
@@ -52,5 +55,7 @@ def mobile_phone_render(*pages):
 if __name__ == '__main__':
     print(mobile_phone_render(*sms_api_endpoint(quote('✔test💩'))))
     print(mobile_phone_render(*sms_api_endpoint(quote('“”å‘’'))))
+    print(mobile_phone_render(*sms_api_endpoint(quote('邱𣿭聖'))))
     print(mobile_phone_render(*sms_api_endpoint(quote(coerce_text('✔test💩')))))
     print(mobile_phone_render(*sms_api_endpoint(quote(coerce_text('“”å‘’')))))
+    print(mobile_phone_render(*sms_api_endpoint(quote(coerce_text('邱𣿭聖')))))
