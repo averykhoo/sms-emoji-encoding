@@ -119,8 +119,19 @@ def coerce_text(text: str,
                 ) -> str:
     """
     coerce text from unicode to USC-2 masqueraded as UTF-16, that can be encoded as UTF-8
-    works in pages of exactly 63 unicode chars
-    pages may be either in UTF-16-BE or UTF-16-LE with BOM
+    works in pages of exactly 63 unicode chars, unless it all fits in a single page of 70 chars
+    each page may be either UTF-16-BE (optional BOM) or UTF-16-LE (mandatory BOM)
+
+    Reasoning:
+    The [SMS spec](https://en.wikipedia.org/wiki/GSM_03.38) basically only allows for (a variant of) ASCII, or UCS-2.
+    UCS-2 only allows you to encode the characters in the BMP (Basic Multilingual Plane), ie. chars <= U+FFFF.
+    However, UCS-2 is deprecated, and all modern phones decode as UTF-16 instead, since it's 100% backwards compatible.
+
+    Unfortunately, the SMS sending api only allows you to send SMS messages in the BMP, so we have to masquerade.
+    Unpaired surrogates are not valid UTF-8, but are necessary to send UTF-16 chars > U+FFFF masqueraded as UCS-2.
+    Fortunately, we can still use UTF-16-LE with BOM, and the phone will decode it as UTF-16.
+    This allows us to send any unicode codepoint not requiring surrogates that, when byte-swapped, are still surrogates.
+    Most of these codepoints are in unassigned or private-use planes, so that's quite lucky.
 
     the algo contains a strange mix of greedy and beam search because global optimization is too much effort
     also this produces results that are slightly more intuitively understandable than global optimization
