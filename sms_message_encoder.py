@@ -28,19 +28,21 @@ def coerce_grapheme(chars: str,
                     handle_unsupported: str = 'replace',
                     ) -> Tuple[Optional[str], Optional[str]]:
     """
-    This helper function is fairly slow, but it's cached
-    and you'd expect to see a reasonably small number of unique graphemes
+    This helper function is fairly slow, but it's cached.
+    Also, you'd expect to see a reasonably small number of unique graphemes.
 
-    Coerces a single grapheme from unicode codepoints into UTF-16 encoded bytes
-    masqueraded a valid string of UCS-2 unicode codepoints
-    that can be safely represented (ie. encoded and decoded) as valid strict UTF-8 bytes
+    Coerces a single grapheme from unicode codepoints into UTF-16 encoded bytes,
+     masqueraded a valid string of UCS-2 unicode codepoints,
+     that can be safely represented (ie. encoded and decoded) as valid strict UTF-8 bytes.
 
-    Graphemes containing unsupported characters are handled according to the HANDLE_UNSUPPORTED parameter
+    Graphemes containing unsupported characters are handled according to the HANDLE_UNSUPPORTED parameter.
 
     The following unicode codepoints are almost certainly broken both ways:
-    [chr(x) for x in range(0xFFFF) if 0xD8 <= (x & 0xFF) < 0xE0 and 0xD8 <= (x >> 8) < 0xE0]
-    or equivalently [chr((x << 8) + y) for x in range(0xD8, 0xE0) for y in range(0xD8, 0xE0)]
-    Fortunately, these are surrogates that mostly encode items in unassigned planes and the private use planes
+    `[chr(x) for x in range(0xFFFF) if 0xD8 <= (x & 0xFF) < 0xE0 and 0xD8 <= (x >> 8) < 0xE0]`
+    Or equivalently: `[chr((x << 8) + y) for x in range(0xD8, 0xE0) for y in range(0xD8, 0xE0)]`
+    Fortunately, these are surrogates that mostly encode items in unassigned planes and the private use planes.
+
+    This attempts to encode all unicode normalized forms of the grapheme, returning the shortest correct encoding.
 
     :param chars: a single grapheme (zero or more unicode codepoints)
     :param handle_unsupported: 'replace', 'ignore', 'error', 'pass'
@@ -75,8 +77,8 @@ def coerce_grapheme(chars: str,
     def decode_ucs2(endianness: str) -> Optional[str]:
         """
         decode as UCS-2 with some specific endianness
+
         :param endianness: ">" for big, "<" for little
-        :return:
         """
         assert endianness in {'>', '<'}
         nonlocal all_grapheme_bytes_be
@@ -96,9 +98,16 @@ def coerce_grapheme(chars: str,
     encoded_be = decode_ucs2('>')
     encoded_le = decode_ucs2('<')
 
+    # don't allow encodings that are too long
+    if len(encoded_be) >= 63:
+        encoded_be = None
+    if len(encoded_le) >= 63:
+        encoded_le = None
+
     # no point returning errors on both sides, increases time and space complexity the greedy algorithm
     if encoded_be is None and encoded_le is None:
         # todo: handle unencodable diacritics by dropping them, maybe as a "try harder" step since both failed anyway
+        # but this should be a rare scenario, unless zalgo is somehow involved
         return REPLACEMENT_CHARACTER_BE, REPLACEMENT_CHARACTER_LE
 
     return encoded_be, encoded_le
@@ -118,23 +127,31 @@ def coerce_text(text: str,
                 handle_unsupported: str = 'replace',
                 ) -> str:
     """
-    coerce text from unicode to USC-2 masqueraded as UTF-16, that can be encoded as UTF-8
-    works in pages of exactly 63 unicode chars, unless it all fits in a single page of 70 chars
-    each page may be either UTF-16-BE (optional BOM) or UTF-16-LE (mandatory BOM)
+    A best-effort attempt to re-encode text to preserve emoji above U+FFFF when sending SMSes.
+    At a bare minimum, this will not cause text to appear worse than attempting to send it unprocessed.
+
+    TL;DR:
+    Coerces text from unicode to UTF-16, masqueraded as UCS-2, that can be encoded as UTF-8.
+    Works in pages of exactly 63 unicode chars, unless it all fits in a single page of 70 chars.
+    Each page may be either UTF-16-BE (optional BOM) or UTF-16-LE (mandatory BOM).
 
     Reasoning:
     The [SMS spec](https://en.wikipedia.org/wiki/GSM_03.38) basically only allows for (a variant of) ASCII, or UCS-2.
     UCS-2 only allows you to encode the characters in the BMP (Basic Multilingual Plane), ie. chars <= U+FFFF.
-    However, UCS-2 is deprecated, and all modern phones decode as UTF-16 instead, since it's 100% backwards compatible.
+    However, UCS-2 is deprecated, so all modern phones decode as UTF-16 instead, since it's 100% backwards compatible.
+    One side-effect of this is that modern phones can send and receive emoji above U+FFFF.
 
-    Unfortunately, the SMS sending api only allows you to send SMS messages in the BMP, so we have to masquerade.
-    Unpaired surrogates are not valid UTF-8, but are necessary to send UTF-16 chars > U+FFFF masqueraded as UCS-2.
-    Fortunately, we can still use UTF-16-LE with BOM, and the phone will decode it as UTF-16.
-    This allows us to send any unicode codepoint not requiring surrogates that, when byte-swapped, are still surrogates.
-    Most of these codepoints are in unassigned or private-use planes, so that's quite lucky.
+    Unfortunately, the SMS API only allows you to send SMS messages in the BMP, so we have to masquerade.
+    Also, the API also seems to use a strict UTF-8 decoder that replaces unpaired surrogates with U+FFFD.
+    These unpaired surrogates are the key to sending UTF-16 chars > U+FFFF masqueraded as UCS-2.
 
-    the algo contains a strange mix of greedy and beam search because global optimization is too much effort
-    also this produces results that are slightly more intuitively understandable than global optimization
+    Fortunately, phones correctly detect and decode UTF-16-LE with BOM.
+    This allows us to swap byte ordering, as long as we prepend a byte-swapped BOM.
+    This precludes codepoints that require surrogates that, when byte-swapped, are still surrogates
+    But since most of those codepoints are in unassigned or private-use planes, it'll be a very rare edge case.
+
+    The algo contains a strange mix of greedy and beam search because global optimization is too much effort.
+    Also, this produces results that are slightly more intuitively understandable than global optimization.
     """
     assert max_pages > 0
     _graphemes = list(grapheme.graphemes(text))
