@@ -16,8 +16,8 @@ def sms_api_endpoint(url_encoded_query_parameter):
     6. sends each page separately (metadata defines the ordering)
     in this case, it will return a list of pages
     """
-    # (1) and (2): decode url query parameter
-    text = unquote(url_encoded_query_parameter)
+    # (1) and (2): decode url query parameter, replacing unpaired surrogates with U+FFFD
+    text = unquote(url_encoded_query_parameter, encoding='utf-8', errors='replace')
     assert len(text) > 0  # sending empty messages not supported; instead, you can send just a BOM '\uFEFF'
     assert '\0' not in text  # sending null not supported
 
