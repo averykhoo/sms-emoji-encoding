@@ -136,22 +136,31 @@ def coerce_text(text: str,
     Each page may be either UTF-16-BE (optional BOM) or UTF-16-LE (mandatory BOM).
 
     Reasoning:
-    The [SMS spec](https://en.wikipedia.org/wiki/GSM_03.38) basically only allows for (a variant of) ASCII, or UCS-2.
+    The [SMS spec](https://en.wikipedia.org/wiki/GSM_03.38) only allows either (a variant of) ASCII or UCS-2.
     UCS-2 only allows you to encode the characters in the BMP (Basic Multilingual Plane), ie. chars <= U+FFFF.
-    However, UCS-2 is deprecated, so all modern phones decode as UTF-16 instead, since it's 100% backwards compatible.
-    One side-effect of this is that modern phones can send and receive emoji above U+FFFF.
+    This means that, technically speaking, the SMS spec doesn't allow you to send U+1F4A9 PILE_OF_POO "💩".
+    But, in practice, most modern phones can send and receive emoji.
+    This is because UCS-2 has been deprecated, so phones use UTF-16 instead, which is 100% backwards compatible.
 
-    Unfortunately, the SMS API only allows you to send SMS messages in the BMP, so we have to masquerade.
-    Also, the API also seems to use a strict UTF-8 decoder that replaces unpaired surrogates with U+FFFD.
-    These unpaired surrogates are the key to sending UTF-16 chars > U+FFFF masqueraded as UCS-2.
+    Unfortunately, the SMS API strictly follows the SMS spec, and only allows you to send SMS messages in UCS-2.
+    In theory however, we can still masquerade UTF-16 as UCS-2, using the following conversion:
+    `'💩'.encode('utf-16-be').decode('ucs2')` -> '\uD83D\uDCA9' (not valid python code)
 
-    Fortunately, phones correctly detect and decode UTF-16-LE with BOM.
-    This allows us to swap byte ordering, as long as we prepend a byte-swapped BOM.
-    This precludes codepoints that require surrogates that, when byte-swapped, are still surrogates
-    But since most of those codepoints are in unassigned or private-use planes, it'll be a very rare edge case.
+    But the API also seems to use a strict UTF-8 decoder that replaces unpaired surrogates with U+FFFD.
+    Surrogates are how UTF-16 encodes chars > U+FFFF, so we really do need them to send emoji.
+    But since phones correctly detect and decode UTF-16-LE with BOM, we can simply swap byte ordering as follows:
+    `'\uFFFE' + '💩'.encode('utf-16-le').decode('ucs2')` -> '\uFFFE\u3DD8\uA9DC' (not valid python code)
+
+    This still precludes codepoints that require surrogates that, when byte-swapped, are still surrogates.
+    Fortunately, the majority of these unsupported codepoints are in unassigned or private-use planes.
+
+    Another side-effect of byte-swapping is that plaintext messages will look strange in the SMS API logs.
+    For example, 'test' will be encoded as '\uFFFE琀攀猀琀'.
+    We can minimize this by preferring UTF-16-BE over UTF-16-LE, and only byte-swapping when necessary.
+    UTF-16-BE also doesn't require a BOM, so it saves one character.
 
     The algo contains a strange mix of greedy and beam search because global optimization is too much effort.
-    Also, this produces results that are slightly more intuitively understandable than global optimization.
+    On top of being simpler, it produces results that are more intuitively understandable than global optimization.
     """
     assert max_pages > 0
     _graphemes = list(grapheme.graphemes(text))
