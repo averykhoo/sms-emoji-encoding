@@ -18,6 +18,8 @@ def sms_api_endpoint(url_encoded_query_parameter):
     """
     # (1) and (2): decode url query parameter
     text = unquote(url_encoded_query_parameter)
+    assert len(text) > 0  # sending empty messages not supported; instead, you can send just a BOM '\uFEFF'
+    assert '\0' not in text  # sending null not supported
 
     # (3): replace characters greater than U+FFFF with U+FFFD
     replaced_text = ''.join(char if ord(char) <= 0xFFFF else '\uFFFD' for char in text)
