@@ -161,6 +161,12 @@ def coerce_text(text: str,
 
     The algo contains a strange mix of greedy and beam search because global optimization is too much effort.
     On top of being simpler, it produces results that are more intuitively understandable than global optimization.
+
+    It is unknown whether a grapheme can break across pages when encoded "normally" in UTF-16-BE (without BOM).
+    However, the mandatory BOM breaks graphemes that are split across pages encoded in UTF-16-LE with BOM.
+    The current code does not allow graphemes to break across pages, since 30 codepoints is a reasonable limit.
+    One use case for extremely long graphemes is zalgo-fied text, which is useless enough to ignore.
+    Data would not be reasonably considered to be lost if diacritics are truncated from zalgo-fied text.
     """
     assert max_pages > 0
     _graphemes = list(grapheme.graphemes(text))
