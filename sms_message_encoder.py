@@ -19,8 +19,20 @@ from constants import UNSUPPORTED_CHARS
 
 
 def coerce_plaintext(text: str) -> str:
-    unprintable = ''.join(chr(i) for i in range(256) if chr(i) not in string.printable)
-    return unidecode(text).translate(str.maketrans('`\b\f\v\t', "'    ", unprintable))
+    """
+    This coerces unicode text to SMS-charset plaintext
+    """
+    @lru_cache(maxsize=0xFFFF)
+    def coerce_plaintext_grapheme(chars: str) -> str:
+        if len(chars) == 0:
+            return ''
+        if set(chars).intersection(UNSUPPORTED_CHARS):
+            return ''
+        unprintable = ''.join(chr(i) for i in range(256) if chr(i) not in string.printable)
+        out = unidecode(chars).translate(str.maketrans('`\b\f\v\t', "'    ", unprintable))
+        return out or '?'
+
+    return ''.join(map(coerce_plaintext_grapheme, grapheme.graphemes(text)))
 
 
 @lru_cache(maxsize=0xFFFF)
@@ -66,8 +78,8 @@ def coerce_grapheme(chars: str,
     normalized_chars.add(chars)
     for normalization_form in ('NFC', 'NFKC', 'NFD', 'NFKD'):
         normalized_chars.add(unicodedata.normalize(normalization_form, chars))
-    if len(normalized_chars) > 1:
-        print('normalized_chars', normalized_chars)
+    # if len(normalized_chars) > 1:
+    #     print('normalized_chars', normalized_chars)
 
     # encode as UTF-16-BE
     all_grapheme_bytes_be = sorted([chars.encode('utf-16-be') for chars in normalized_chars], key=len)
@@ -99,9 +111,9 @@ def coerce_grapheme(chars: str,
     encoded_le = decode_ucs2('<')
 
     # don't allow encodings that are too long
-    if len(encoded_be) >= 63:
+    if encoded_be is not None and len(encoded_be) >= 63:
         encoded_be = None
-    if len(encoded_le) >= 63:
+    if encoded_le is not None and len(encoded_le) >= 63:
         encoded_le = None
 
     # no point returning errors on both sides, increases time and space complexity the greedy algorithm
@@ -209,10 +221,10 @@ def coerce_text(text: str,
     # fast exit if it worked
     # prefer big endian encoding because it is more likely to be readable, at least in the logs
     if not any(errors_be) and len(single_page_be) <= 70:
-        print('single page encoding be worked')
+        # print('single page encoding be worked')
         return single_page_be
     if not any(errors_le) and len(single_page_le) <= 70:
-        print('single page encoding le worked')
+        # print('single page encoding le worked')
         return single_page_le
 
     # try multi-page encoding, which allows for 63 chars * max_pages
@@ -292,7 +304,7 @@ def coerce_text(text: str,
                 if any(page):
                     new_states.append((start_idx, n_errors, pages))
 
-        print(_page_idx, 'states', states)
+        # print(_page_idx, 'states', states)
 
         # filter to the best possible states so far
         best_new_states = dict()
@@ -302,7 +314,7 @@ def coerce_text(text: str,
 
         # update the states
         states = list(best_new_states.values())
-        print(states)
+        # print(states)
 
         # fast exit if we reached the end
         if all(start_idx + 1 >= len(_graphemes) for start_idx, _, _ in states):
@@ -316,11 +328,11 @@ def coerce_text(text: str,
     errors_and_pages.append((single_page_error_be, [single_page_be]))
     errors_and_pages.append((single_page_error_le, [single_page_le]))
 
-    pprint(errors_and_pages)
+    # pprint(errors_and_pages)
 
     min_error, best_pages = min(errors_and_pages, key=lambda x: (x[0], len(x[1]), len(x[1][-1])))
-    print(min_error, best_pages)
-    print(list(map(len, best_pages)))
+    # print(min_error, best_pages)
+    # print(list(map(len, best_pages)))
     out = []
     for page in best_pages[:-1]:
         if not page:
@@ -330,12 +342,12 @@ def coerce_text(text: str,
         else:
             out.append(right_pad_page(page, BOM_BE))
     out.append(best_pages[-1])
-    print(list(map(len, out)), out)
+    # print(list(map(len, out)), out)
     return ''.join(out)
 
 
 if __name__ == '__main__':
     print(repr(coerce_text('1234567890\0' * 5 + '💩qwe😊asd✔')))
-
-    # todo: error condition
     print(repr(coerce_text('\0\0\0\0\0\0💩qwé😊ÅSD✔', handle_unsupported='error')))
+    print(repr(coerce_plaintext('1234567890\0' * 5 + '💩qwe😊asd✔')))
+    print(repr(coerce_plaintext('\0\0\0\0\0\0💩qwé😊ÅSD✔')))
