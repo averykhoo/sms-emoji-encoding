@@ -44,8 +44,14 @@ def mobile_phone_render(*pages):
     4. prints the concatenated text
     """
     # (2): decode each page as UTF-16, defaulting to big endian unless specified
-    decoded_pages = [page.decode('utf-16-le') if page.startswith(b'\xFF\xFE') else page.decode('utf-16-be')
-                     for page in pages if page]
+    decoded_pages = []
+    for page in pages:
+        if page.startswith(b'\xFE\xFF'):
+            decoded_pages.append(page[2:].decode('utf-16-be'))
+        elif page.startswith(b'\xFF\xFE'):
+            decoded_pages.append(page[2:].decode('utf-16-le'))
+        else:
+            decoded_pages.append(page.decode('utf-16-be'))
 
     # (3): concatenate the pages
     text = ''.join(decoded_pages)
