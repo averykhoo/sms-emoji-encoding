@@ -194,8 +194,11 @@ def coerce_text(text: str,
     single_page_be = ''.join(graphemes_be)
     single_page_le = BOM_LE + ''.join(graphemes_le)
 
-    # big endian text must not start with BOM_LE, otherwise it will decode wrongly
+    # big endian text must not start with U+FFFE, otherwise it will decode wrongly
     if single_page_be[0] == BOM_LE:
+        single_page_be = BOM_BE + single_page_be
+    # big endian text ignores the first U+FEFF, so we need to add it
+    elif single_page_be[0] == BOM_BE:
         single_page_be = BOM_BE + single_page_be
 
     # count errors for big endian
