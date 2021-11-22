@@ -41,6 +41,8 @@ def coerce_plaintext(text: str) -> str:
     '1234567890'
     >>> coerce_plaintext('a' * 100 + '💩')
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?'
+    >>> coerce_plaintext('邱𣿭聖')
+    'Qiu ?Sheng '
     """
 
     @lru_cache(maxsize=0xFFFF)
@@ -221,6 +223,8 @@ def coerce_text(text: str,
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ufffe愀愀愀愀愀愀愀愀愀愀愀愀愀愀愀愀愀㷘\ua9dc'
     >>> coerce_text(string.printable) == string.printable
     True
+    >>> coerce_text('邱𣿭聖')
+    '\ufffe놐俘\ueddf嚀'
     """
     assert max_pages > 0
     _graphemes = list(grapheme.graphemes(text))
