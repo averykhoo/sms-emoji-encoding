@@ -3,7 +3,8 @@ import string
 import struct
 import warnings
 from functools import lru_cache
-from pprint import pprint
+from typing import Dict
+from typing import List
 from typing import Optional
 from typing import Tuple
 
@@ -11,17 +12,37 @@ import grapheme
 import unicodedata
 from unidecode import unidecode
 
-from constants import BOM_BE
-from constants import BOM_LE
-from constants import REPLACEMENT_CHARACTER_BE
-from constants import REPLACEMENT_CHARACTER_LE
-from constants import UNSUPPORTED_CHARS
+from sms_constants import BOM_BE
+from sms_constants import BOM_LE
+from sms_constants import REPLACEMENT_CHARACTER_BE
+from sms_constants import REPLACEMENT_CHARACTER_LE
+from sms_constants import UNSUPPORTED_CHARS
 
 
 def coerce_plaintext(text: str) -> str:
     """
-    This coerces unicode text to SMS-charset plaintext
+    This coerces unicode text to SMS-charset plaintext.
+    Unprintable chars (eg. null) are dropped.
+    All whitespace except CR and LF are normalized to just space.
+
+    >>> coerce_plaintext('\\ufeff')
+    '?'
+    >>> coerce_plaintext('\\ufeff' * 100)
+    '????????????????????????????????????????????????????????????????????????????????????????????????????'
+    >>> coerce_plaintext('\\ufffe')
+    '?'
+    >>> coerce_plaintext('✔️')
+    '?'
+    >>> coerce_plaintext('💩')
+    '?'
+    >>> coerce_plaintext('Åéïôu')
+    'Aeiou'
+    >>> coerce_plaintext('1234567890\\0')  # note that nulls muse be double-escaped for doctests
+    '1234567890'
+    >>> coerce_plaintext('a' * 100 + '💩')
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?'
     """
+
     @lru_cache(maxsize=0xFFFF)
     def coerce_plaintext_grapheme(chars: str) -> str:
         if len(chars) == 0:
@@ -179,16 +200,37 @@ def coerce_text(text: str,
     The current code does not allow graphemes to break across pages, since 30 codepoints is a reasonable limit.
     One use case for extremely long graphemes is zalgo-fied text, which is useless enough to ignore.
     Data would not be reasonably considered to be lost if diacritics are truncated from zalgo-fied text.
+
+    >>> coerce_text('\\ufeff')
+    '\ufeff\ufeff'
+    >>> set(coerce_text('\\ufeff' * 100))
+    {'\ufeff'}
+    >>> len(coerce_text('\\ufeff' * 100))
+    102
+    >>> coerce_text('\\ufffe')
+    '\ufeff\ufffe'
+    >>> coerce_text('✔️')
+    '✔️'
+    >>> coerce_text('💩')
+    '\\ufffe㷘\\ua9dc'
+    >>> coerce_text('Åéïôu')
+    'Åéïôu'
+    >>> coerce_text('1234567890\\0')  # note that nulls muse be double-escaped for doctests
+    '1234567890�'
+    >>> coerce_text('a' * 80 + '💩')
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\ufffe愀愀愀愀愀愀愀愀愀愀愀愀愀愀愀愀愀㷘\ua9dc'
+    >>> coerce_text(string.printable) == string.printable
+    True
     """
     assert max_pages > 0
     _graphemes = list(grapheme.graphemes(text))
 
     # re-encode and count encoding failures
-    graphemes_be, graphemes_le = zip(*map(coerce_grapheme, _graphemes, itertools.repeat(handle_unsupported)))
-    errors_be = [g is None for g in graphemes_be]
-    errors_le = [g is None for g in graphemes_le]
-    graphemes_be = [REPLACEMENT_CHARACTER_BE if g is None else g for g in graphemes_be]
-    graphemes_le = [REPLACEMENT_CHARACTER_LE if g is None else g for g in graphemes_le]
+    _graphemes_be, _graphemes_le = zip(*map(coerce_grapheme, _graphemes, itertools.repeat(handle_unsupported)))
+    errors_be = [g is None for g in _graphemes_be]
+    errors_le = [g is None for g in _graphemes_le]
+    graphemes_be: List[str] = [REPLACEMENT_CHARACTER_BE if g is None else g for g in _graphemes_be]
+    graphemes_le: List[str] = [REPLACEMENT_CHARACTER_LE if g is None else g for g in _graphemes_le]
 
     # try single page encoding, which allows for 70 chars
     single_page_be = ''.join(graphemes_be)
@@ -231,7 +273,7 @@ def coerce_text(text: str,
         return single_page_le
 
     # try multi-page encoding, which allows for 63 chars * max_pages
-    states = [(0, 0, [])]  # idx, n_errors, pages
+    states: List[Tuple[int, int, List[str]]] = [(0, 0, [])]  # idx, n_errors, pages
     for _page_idx in range(max_pages):
         new_states = []
 
@@ -248,7 +290,7 @@ def coerce_text(text: str,
 
         # big-endian
         for start_idx, n_errors, pages in states:
-            page = []
+            page: List[str] = []
             total_len = 0
             for idx in range(start_idx, len(_graphemes)):
                 # if this char caused an encoding error, save before adding it
@@ -257,13 +299,13 @@ def coerce_text(text: str,
                     n_errors += 1
 
                 # append this grapheme to the page
-                page.append(graphemes_be[idx])
-                total_len += len(graphemes_be[idx])
-
                 # we can't allow a BOM_LE to be the first char of a page
-                if page[0][0] == BOM_LE:
-                    page = [BOM_BE] + page
-                    total_len += 1
+                if len(page) == 0 and graphemes_be[idx][0] in {BOM_LE, BOM_BE}:
+                    page.append(BOM_BE + graphemes_be[idx])
+                    total_len += 1 + len(graphemes_be[idx])
+                else:
+                    page.append(graphemes_be[idx])
+                    total_len += len(graphemes_be[idx])
 
                 # we're at the end of the text, save because we're gonna exit
                 if idx + 1 >= len(graphemes_be):
@@ -272,7 +314,7 @@ def coerce_text(text: str,
 
                 # next char is too big to fit in page, save and exit
                 elif len(graphemes_be[idx + 1]) + total_len > 63:
-                    append(idx, n_errors, pages, page)
+                    append(idx + 1, n_errors, pages, page)
                     break
             else:
                 # end of text
@@ -295,12 +337,12 @@ def coerce_text(text: str,
 
                 # we're at the end of the text, save because we're gonna exit
                 if idx + 1 >= len(graphemes_le):
-                    append(idx, n_errors, pages, page)
+                    append(idx + 1, n_errors, pages, page)
                     break
 
                 # next char is too big to fit in page, save and exit
                 elif len(graphemes_le[idx + 1]) + total_len > 63:
-                    append(idx, n_errors, pages, page)
+                    append(idx + 1, n_errors, pages, page)
                     break
             else:
                 # end of text
@@ -310,7 +352,7 @@ def coerce_text(text: str,
         # print(_page_idx, 'states', states)
 
         # filter to the best possible states so far
-        best_new_states = dict()
+        best_new_states: Dict[int, Tuple[int, int, List[str]]] = dict()
         for start_idx, n_errors, pages in new_states:
             if start_idx > best_new_states.get(n_errors, (0, 0, []))[0]:
                 best_new_states[n_errors] = (start_idx, n_errors, pages)
@@ -320,30 +362,31 @@ def coerce_text(text: str,
         # print(states)
 
         # fast exit if we reached the end
-        if all(start_idx + 1 >= len(_graphemes) for start_idx, _, _ in states):
+        if all(start_idx >= len(_graphemes) for start_idx, _, _ in states):
             break
 
     # count lost text as encoding errors
-    errors_and_pages = []
+    errors_and_pages: List[Tuple[int, List[str]]] = []
     for start_idx, n_errors, pages in states:
         truncated_text_errors = max(0, len(_graphemes) - start_idx) * truncated_text_error_multiplier
         errors_and_pages.append((n_errors + truncated_text_errors, pages))
     errors_and_pages.append((single_page_error_be, [single_page_be]))
     errors_and_pages.append((single_page_error_le, [single_page_le]))
 
+    # from pprint import pprint
     # pprint(errors_and_pages)
 
     min_error, best_pages = min(errors_and_pages, key=lambda x: (x[0], len(x[1]), len(x[1][-1])))
     # print(min_error, best_pages)
     # print(list(map(len, best_pages)))
     out = []
-    for page in best_pages[:-1]:
-        if not page:
-            raise RuntimeError('empty page')
-        elif page[0] == BOM_LE:
-            out.append(right_pad_page(page, BOM_LE))
+    for best_page in best_pages[:-1]:
+        if not best_page:
+            raise RuntimeError('empty best_page')
+        elif best_page[0] == BOM_LE:
+            out.append(right_pad_page(best_page, BOM_LE))
         else:
-            out.append(right_pad_page(page, BOM_BE))
+            out.append(right_pad_page(best_page, BOM_BE))
     out.append(best_pages[-1])
     # print(list(map(len, out)), out)
     return ''.join(out)
