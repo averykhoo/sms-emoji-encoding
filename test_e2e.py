@@ -30,6 +30,15 @@ def test_end_to_end():
         string.ascii_letters * 5,  # 26 * 2 * 5 chars
         string.whitespace * 10,
 
+        # emoji sentences
+        '❌️-😢-🔚-😀-✨✨✨',  # Don't cry because it's over, smile because it happened
+        # '📚️📚️📚️📚️ ⏳😀⌛️😭',  # So many books, so little time. -> not possible, requires U+DCDA
+        '🐝🔀🙏👁️👁️➡️🌎',  # Be the change that you wish to see in the world
+        '❌🎶🎵🎶❌ ⬇️⬇️⬇️⬇️⬇️ ❌🆒❌🆒❌',  # Without music, life would be a mistake
+        '✋🤬⬆️😈',  # I solemnly swear I'm up to no good
+        '☝️⏲️😠 ⬇️⬇️⬇️⬇️⬇️⬇️ ❌6⃣0⃣⏲️😄❌ ⬇️⬇️⬇️⬇️⬇️⬇️ 😢😭😢😭😢😭',
+        # For every minute you are angry you lose sixty seconds of happiness
+
         # pangrams
         'The quick brown fox jumps over a lazy dog.',
         'Jackdaws love my big sphinx of quartz.',
