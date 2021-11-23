@@ -96,16 +96,16 @@ def coerce_grapheme(chars: str,
             warnings.warn("while it's supported, you should never need to use this mode")
             return None, None
 
-    # unicode normalization of chars
-    # todo: prefer original unmodified char if it can be encoded (eg '，' != ',')
-    normalized_chars = set()
-    normalized_chars.add(chars)
+    # unicode normalization of chars, prefer original if possible
+    normalized_chars = [chars]
     for normalization_form in ('NFC', 'NFKC', 'NFD', 'NFKD'):
-        normalized_chars.add(unicodedata.normalize(normalization_form, chars))
+        _chars = unicodedata.normalize(normalization_form, chars)
+        if _chars != chars and _chars not in normalized_chars:
+            normalized_chars.append(unicodedata.normalize(normalization_form, chars))
     # if len(normalized_chars) > 1:
     #     print('normalized_chars', normalized_chars)
 
-    # encode as UTF-16-BE
+    # encode as UTF-16-BE, prefer shorter encodings where possible (original preferred if equally short)
     all_grapheme_bytes_be = sorted([chars.encode('utf-16-be') for chars in normalized_chars], key=len)
     assert all(len(grapheme_bytes_be) % 2 == 0 for grapheme_bytes_be in all_grapheme_bytes_be)
 
