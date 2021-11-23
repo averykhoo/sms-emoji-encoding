@@ -46,6 +46,9 @@ def test_end_to_end():
         '✋🤬⬆️😈',  # I solemnly swear I'm up to no good
         '☝️⏲️😠 ⬇️⬇️⬇️⬇️⬇️⬇️ ❌6⃣0⃣⏲️😄❌ ⬇️⬇️⬇️⬇️⬇️⬇️ 😢😭😢😭😢😭',
         # For every minute you are angry you lose sixty seconds of happiness
+        '✔' * 256,
+        '💩' * 100,  # emoji > U+FFFF, needs 2 bytes
+        '✔️' * 100,  # compound emoji, needs 3 bytes
 
         # pangrams
         'The quick brown fox jumps over a lazy dog.',
