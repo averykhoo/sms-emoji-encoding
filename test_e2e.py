@@ -30,6 +30,14 @@ def test_end_to_end():
         string.ascii_letters * 5,  # 26 * 2 * 5 chars
         string.whitespace * 10,
 
+        # edge cases
+        '\uFEFF\uFEFF.',
+        '\uFEFF\uFFFE.',
+        '\uFFFE\uFEFF.',
+        '\uFFFE\uFFFE.',
+        ('\uFEFF' * 61 + '.') * 3,  # 61 + 1 + leading BOM = 63 per page
+        ('\uFFFE' * 61 + '.') * 3,  # 61 + 1 + leading BOM = 63 per page
+
         # emoji sentences
         '❌️-😢-🔚-😀-✨✨✨',  # Don't cry because it's over, smile because it happened
         # '📚️📚️📚️📚️ ⏳😀⌛️😭',  # So many books, so little time. -> not possible, requires U+DCDA
