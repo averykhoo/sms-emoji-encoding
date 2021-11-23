@@ -52,6 +52,7 @@ def test_end_to_end():
         '視野無限廣，窗外有藍天',
         '微風迎客，軟語伴茶',
         'Innovation in China 中国智造，慧及全球 0123456789',
+        '他很不耐烦，总是在我说到一半的时候就打断我。',
 
         # non-english pangrams (skip RTL languages since BiDi is not supported)
         'Zəfər, jaketini də papağını da götür, bu axşam hava çox soyuq olacaq.',  # Azeri
