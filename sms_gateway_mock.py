@@ -35,7 +35,7 @@ def sms_api_endpoint(url_encoded_query_parameter):
     return encoded_pages
 
 
-def mobile_phone_render(*pages):
+def mobile_phone_render(*pages, rstrip=True):
     """
     mocks a mobile phone that:
     1. accepts a list of pages (as bytes)
@@ -52,6 +52,9 @@ def mobile_phone_render(*pages):
             decoded_pages.append(page[2:].decode('utf-16-le'))
         else:
             decoded_pages.append(page.decode('utf-16-be'))
+
+    if rstrip:
+        decoded_pages = [page.rstrip('\uFEFF') for page in decoded_pages]
 
     # (3): concatenate the pages
     text = ''.join(decoded_pages)
