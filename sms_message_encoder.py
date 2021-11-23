@@ -97,6 +97,7 @@ def coerce_grapheme(chars: str,
             return None, None
 
     # unicode normalization of chars
+    # todo: prefer original unmodified char if it can be encoded (eg '，' != ',')
     normalized_chars = set()
     normalized_chars.add(chars)
     for normalization_form in ('NFC', 'NFKC', 'NFD', 'NFKD'):
