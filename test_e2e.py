@@ -30,6 +30,12 @@ def test_end_to_end():
         string.ascii_letters * 5,  # 26 * 2 * 5 chars
         string.whitespace * 10,
 
+        # unicode punctuation
+        '“”' * 100,
+        '‘’' * 100,
+        'Åéïôu',  # non-compound diacritics
+        # 'Åéïôu',  # compound diacritics will be normalized, output will not be the same
+
         # edge cases
         '\uFEFF\uFEFF.',
         '\uFEFF\uFFFE.',

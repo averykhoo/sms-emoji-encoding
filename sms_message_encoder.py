@@ -23,7 +23,7 @@ def coerce_plaintext(text: str) -> str:
     """
     This coerces unicode text to SMS-charset plaintext.
     Unprintable chars (eg. null) are dropped.
-    All whitespace except CR and LF are normalized to just space.
+    All whitespace except CR and LF are normalized to just plain space (' ').
 
     >>> coerce_plaintext('\\ufeff')
     '?'
@@ -31,11 +31,15 @@ def coerce_plaintext(text: str) -> str:
     '????????????????????????????????????????????????????????????????????????????????????????????????????'
     >>> coerce_plaintext('\\ufffe')
     '?'
-    >>> coerce_plaintext('✔️')
+    >>> coerce_plaintext('✔')  # basic emoji < U+FFFF
     '?'
-    >>> coerce_plaintext('💩')
+    >>> coerce_plaintext('✔️')  # compound emoji, each codepoint < U+FFFF
     '?'
-    >>> coerce_plaintext('Åéïôu')
+    >>> coerce_plaintext('💩')  # emoji > U+FFFF
+    '?'
+    >>> coerce_plaintext('Åéïôu')  # characters with diacritics (non-compound; len=5)
+    'Aeiou'
+    >>> coerce_plaintext('Åéïôu')  # characters with diacritics (compound; len=9)
     'Aeiou'
     >>> coerce_plaintext('1234567890\\0')  # note that nulls muse be double-escaped for doctests
     '1234567890'
@@ -212,11 +216,15 @@ def coerce_text(text: str,
     102
     >>> coerce_text('\\ufffe')
     '\ufeff\ufffe'
-    >>> coerce_text('✔️')
+    >>> coerce_text('✔')  # basic emoji < U+FFFF
+    '✔'
+    >>> coerce_text('✔️')  # compound emoji, each codepoint < U+FFFF
     '✔️'
-    >>> coerce_text('💩')
+    >>> coerce_text('💩')  # emoji > U+FFFF
     '\\ufffe㷘\\ua9dc'
-    >>> coerce_text('Åéïôu')
+    >>> coerce_text('Åéïôu')  # characters with diacritics (non-compound; len=5)
+    'Åéïôu'
+    >>> coerce_text('Åéïôu')  # characters with diacritics (compound; len=9)
     'Åéïôu'
     >>> coerce_text('1234567890\\0')  # note that nulls muse be double-escaped for doctests
     '1234567890�'
@@ -395,10 +403,3 @@ def coerce_text(text: str,
     out.append(best_pages[-1])
     # print(list(map(len, out)), out)
     return ''.join(out)
-
-
-if __name__ == '__main__':
-    print(repr(coerce_text('1234567890\0' * 5 + '💩qwe😊asd✔')))
-    print(repr(coerce_text('\0\0\0\0\0\0💩qwé😊ÅSD✔', handle_unsupported='error')))
-    print(repr(coerce_plaintext('1234567890\0' * 5 + '💩qwe😊asd✔')))
-    print(repr(coerce_plaintext('\0\0\0\0\0\0💩qwé😊ÅSD✔')))
