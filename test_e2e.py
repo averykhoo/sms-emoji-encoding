@@ -134,6 +134,11 @@ def test_end_to_end():
         'Жебракують філософи при ґанку церкви в Гадячі, ще й шатро їхнє п’яне знаємо.',  # Ukrainian
         'Ìwò̩fà ń yò̩ séji tó gbojúmó̩, ó hàn pákànpò̩ gan-an nis̩é̩ rè̩ bó dò̩la.',  # Yoruba
         'Parciais fy jac codi baw hud llawn dŵr ger tŷ Mabon.',  # Welsh
+        '\n'.join(['[rapid] 2023-01-05 11:00:00',
+                   '🆘 1 checks are down',
+                   'Keycloak: 11/12 checks are up (1 down)',
+                   'RAPID: 12/12 checks are up',
+                   'Scoold: 1/1 checks are up']),
     ]
     for test_string in test_strings:
         if not end_to_end_text_equality(test_string):

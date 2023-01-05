@@ -41,7 +41,7 @@ def coerce_plaintext(text: str) -> str:
     'Aeiou'
     >>> coerce_plaintext('Åéïôu')  # characters with diacritics (compound; len=9)
     'Aeiou'
-    >>> coerce_plaintext('1234567890\\0')  # note that nulls muse be double-escaped for doctests
+    >>> coerce_plaintext('1234567890\\0')  # note that nulls must be double-escaped for doctests
     '1234567890'
     >>> coerce_plaintext('a' * 100 + '💩')
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?'
