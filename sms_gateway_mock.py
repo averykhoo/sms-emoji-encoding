@@ -1,6 +1,9 @@
 import struct
 from urllib.parse import unquote
 
+from sms_constants import BOM_BE
+from sms_constants import BOM_LE
+
 
 def sms_api_endpoint(url_encoded_query_parameter):
     """
@@ -31,7 +34,17 @@ def sms_api_endpoint(url_encoded_query_parameter):
 
     # (4): split into pages of 63 characters (except for a single page)
     if len(replaced_text) > 70:
-        pages = [replaced_text[i:i + 63] for i in range(0, len(replaced_text), 63)]
+        pages = []
+        cursor = 0
+        while cursor < len(replaced_text):
+            if replaced_text[cursor] == BOM_BE or replaced_text[cursor] == BOM_LE:
+                pages.append(replaced_text[cursor:cursor + 67])
+                cursor += 67
+            else:
+                pages.append(replaced_text[cursor:cursor + 63])
+                cursor += 63
+
+        # pages = [replaced_text[i:i + 63] for i in range(0, len(replaced_text), 63)]
     else:
         pages = [replaced_text]
 
@@ -60,12 +73,15 @@ def mobile_phone_render(*pages, rstrip=True):
     # (2): decode each page as UTF-16, defaulting to big endian unless specified
     decoded_pages = []
     for page in pages:
+        print('<', len(page), repr(page))
         if page.startswith(b'\xFE\xFF'):
             decoded_pages.append(page[2:].decode('utf-16-be'))
         elif page.startswith(b'\xFF\xFE'):
             decoded_pages.append(page[2:].decode('utf-16-le'))
         else:
             decoded_pages.append(page.decode('utf-16-be'))
+
+        print('>', len(decoded_pages[-1]), decoded_pages[-1])
 
     if rstrip:
         decoded_pages = [page.rstrip('\uFEFF') for page in decoded_pages]
