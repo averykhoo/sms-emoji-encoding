@@ -22,22 +22,26 @@ outputs = {
 
     '[rapid] 2023-01-05 11:00:00\n🆘 1 checks are down\nKeycloak: 11/12 checks are up (1 down)\nRAPID: 12/12 checks are up\nScoold: 1/1 checks are up':
         '[rapid] 2023-01-05 11:00:00\n🆘 1 checks are down\nKeycloak: 11/㄀㈀ 挀hecks are up (1 down)\nRAPID: 12/12 checks are up\nScoold: 1/1 checks are up',
+
+    '[rapid] 2023-01-05 14:52:13\n✅ 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 0':
+        '[rapid] 2023-01-05 14:52:13\n✅ 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 123456789 0',
 }
 if __name__ == '__main__':
 
     for expected, actual in outputs.items():
         print('-' * 100)
-        print(repr(expected))
+        print('expected: ', repr(expected))
         print('-' * 100)
-        print(repr(coerce_text(expected)))
+        print('coerced:  ', repr(coerce_text(expected)))
         print('-' * 100)
         # print(repr(quote(coerce_text(expected))))
         # print('-' * 100)
-        print(repr(sms_api_endpoint(quote(coerce_text(expected)))))
+        print('pages:    ', repr(sms_api_endpoint(quote(coerce_text(expected)))))
         print('-' * 100)
-        print(repr(mobile_phone_render(*sms_api_endpoint(quote(coerce_text(expected)))).replace('\u2000', ' ')))
+        print('rendered: ', repr(mobile_phone_render(*sms_api_endpoint(quote(coerce_text(expected)))
+                                                     ).replace('\u2000', ' ')))
         print('=' * 100)
-        print(repr(actual))
+        print('actual:   ', repr(actual))
         print('=' * 100)
         print()
         print()
