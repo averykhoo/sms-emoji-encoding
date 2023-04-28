@@ -156,9 +156,23 @@ def coerce_grapheme(chars: str,
 def right_pad_page(text: str, char: str) -> str:
     """
     right pad text to 63 chars
+
+    WARNING:
+    there's additional logic in here to add extra padding in the case where the message starts with a BOM
+    i'm not sure why but the sms gateway seems to handle pages differently based on this condition
+    and causes weird rendering issues when certain emoji are used
+    this works around it by adding extra padding when the page starts with a BOM so the wrapping issues aren't visible
+    but it does waste 4 extra characters for no good reason
+
+    TODO: work the variable page size logic into the decoder and optimize messages sent
+    but only after understanding *why* the sms gateway behaves this way
+    there's a good chance documentation simply doesn't exist though, so this may never be properly sresolved
     """
     assert len(text) <= 63
-    return text + char * (63 - len(text))
+    if text.startswith(BOM_BE) or text.startswith(BOM_LE):
+        return text + char * (67 - len(text))
+    else:
+        return text + char * (63 - len(text))
 
 
 def coerce_text(text: str,

@@ -34,6 +34,7 @@ def sms_api_endpoint(url_encoded_query_parameter):
 
     # (4): split into pages of 63 characters (except for a single page)
     if len(replaced_text) > 70:
+        # pages = [replaced_text[i:i + 63] for i in range(0, len(replaced_text), 63)]
         pages = []
         cursor = 0
         while cursor < len(replaced_text):
@@ -73,15 +74,12 @@ def mobile_phone_render(*pages, rstrip=True):
     # (2): decode each page as UTF-16, defaulting to big endian unless specified
     decoded_pages = []
     for page in pages:
-        # print('<', len(page), repr(page))
         if page.startswith(b'\xFE\xFF'):
             decoded_pages.append(page[2:].decode('utf-16-be'))
         elif page.startswith(b'\xFF\xFE'):
             decoded_pages.append(page[2:].decode('utf-16-le'))
         else:
             decoded_pages.append(page.decode('utf-16-be'))
-
-        # print('>', len(decoded_pages[-1]), decoded_pages[-1])
 
     if rstrip:
         decoded_pages = [page.rstrip('\uFEFF') for page in decoded_pages]
