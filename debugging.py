@@ -43,7 +43,12 @@ if __name__ == '__main__':
         print('=' * 100)
         print('actual:   ', repr(actual))
         print('=' * 100)
+
+        # this was to test that the bug was correctly simulated
         # assert rendered == actual
+
+        # this is to test that the bug was fixed
+        assert rendered == expected
         print()
         print()
         print()
