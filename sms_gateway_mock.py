@@ -73,7 +73,7 @@ def mobile_phone_render(*pages, rstrip=True):
     # (2): decode each page as UTF-16, defaulting to big endian unless specified
     decoded_pages = []
     for page in pages:
-        print('<', len(page), repr(page))
+        # print('<', len(page), repr(page))
         if page.startswith(b'\xFE\xFF'):
             decoded_pages.append(page[2:].decode('utf-16-be'))
         elif page.startswith(b'\xFF\xFE'):
@@ -81,7 +81,7 @@ def mobile_phone_render(*pages, rstrip=True):
         else:
             decoded_pages.append(page.decode('utf-16-be'))
 
-        print('>', len(decoded_pages[-1]), decoded_pages[-1])
+        # print('>', len(decoded_pages[-1]), decoded_pages[-1])
 
     if rstrip:
         decoded_pages = [page.rstrip('\uFEFF') for page in decoded_pages]
